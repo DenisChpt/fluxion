@@ -96,27 +96,43 @@ pub(crate) const fn cpu_backend(
 }
 
 #[cfg(feature = "wgpu")]
-pub(crate) fn wgpu_backend(
-) -> &'static fluxion_backend_wgpu::WgpuBackend {
+pub(crate) fn try_init_wgpu(
+) -> Option<&'static fluxion_backend_wgpu::WgpuBackend> {
 	use std::sync::OnceLock;
 	static INSTANCE: OnceLock<
-		fluxion_backend_wgpu::WgpuBackend,
+		Option<fluxion_backend_wgpu::WgpuBackend>,
 	> = OnceLock::new();
-	INSTANCE.get_or_init(|| {
-		fluxion_backend_wgpu::WgpuBackend::new()
-			.expect("wgpu backend initialization failed")
-	})
+	INSTANCE
+		.get_or_init(|| {
+			fluxion_backend_wgpu::WgpuBackend::new().ok()
+		})
+		.as_ref()
+}
+
+#[cfg(feature = "wgpu")]
+pub(crate) fn wgpu_backend(
+) -> &'static fluxion_backend_wgpu::WgpuBackend {
+	try_init_wgpu()
+		.expect("wgpu backend initialization failed")
+}
+
+#[cfg(feature = "hip")]
+pub(crate) fn try_init_hip(
+) -> Option<&'static fluxion_backend_hip::HipBackend> {
+	use std::sync::OnceLock;
+	static INSTANCE: OnceLock<
+		Option<fluxion_backend_hip::HipBackend>,
+	> = OnceLock::new();
+	INSTANCE
+		.get_or_init(|| {
+			fluxion_backend_hip::HipBackend::new().ok()
+		})
+		.as_ref()
 }
 
 #[cfg(feature = "hip")]
 pub(crate) fn hip_backend(
 ) -> &'static fluxion_backend_hip::HipBackend {
-	use std::sync::OnceLock;
-	static INSTANCE: OnceLock<
-		fluxion_backend_hip::HipBackend,
-	> = OnceLock::new();
-	INSTANCE.get_or_init(|| {
-		fluxion_backend_hip::HipBackend::new()
-			.expect("HIP backend initialization failed")
-	})
+	try_init_hip()
+		.expect("HIP backend initialization failed")
 }

@@ -572,11 +572,12 @@ impl WgpuBackend {
 	}
 
 	/// Run a reduction pipeline and read back partial results.
-	fn run_reduction(
+	fn run_reduction<T>(
 		&self,
 		pipeline: &wgpu::ComputePipeline,
 		buf: &WgpuBuffer,
-	) -> Vec<f32> {
+		fold: impl FnOnce(&[f32]) -> T,
+	) -> T {
 		let len = buf.len() as u32;
 		let n_groups = len.div_ceil(256);
 
@@ -642,20 +643,25 @@ impl WgpuBackend {
 			.submit(std::iter::once(encoder.finish()));
 
 		let slice = scratch.staging.slice(..staging_size);
-		slice.map_async(wgpu::MapMode::Read, |_| {});
+		let (tx, rx) = std::sync::mpsc::channel();
+		slice.map_async(wgpu::MapMode::Read, move |r| {
+			tx.send(r).ok();
+		});
 		self.ctx
 			.device
 			.poll(wgpu::PollType::wait_indefinitely())
 			.expect("device poll failed");
+		rx.recv()
+			.expect("map channel closed")
+			.expect("map_async failed");
 
 		let data = slice.get_mapped_range();
-		let partials: Vec<f32> =
-			bytemuck::cast_slice(&data).to_vec();
+		let result = fold(bytemuck::cast_slice(&data));
 		drop(data);
 		scratch.staging.unmap();
 		drop(scratch);
 
-		partials
+		result
 	}
 }
 
@@ -987,45 +993,47 @@ impl Backend for WgpuBackend {
 
 	#[inline]
 	fn norm_l2(&self, buf: &WgpuBuffer) -> Result<f64> {
-		let partials = self.run_reduction(
+		Ok(self.run_reduction(
 			&self.reduce_sum_sq_pipeline,
 			buf,
-		);
-		Ok(kahan_sum(&partials).sqrt())
+			|p| kahan_sum(p).sqrt(),
+		))
 	}
 
 	fn reduce_sum(&self, buf: &WgpuBuffer) -> Result<f64> {
-		let partials = self.run_reduction(
+		Ok(self.run_reduction(
 			&self.reduce_sum_pipeline,
 			buf,
-		);
-		Ok(kahan_sum(&partials))
+			kahan_sum,
+		))
 	}
 
 	fn reduce_max(&self, buf: &WgpuBuffer) -> Result<f64> {
-		let partials = self.run_reduction(
+		Ok(self.run_reduction(
 			&self.reduce_max_pipeline,
 			buf,
-		);
-		Ok(partials
-			.iter()
-			.copied()
-			.map(f64::from)
-			.reduce(f64::max)
-			.unwrap_or(f64::NEG_INFINITY))
+			|p| {
+				p.iter()
+					.copied()
+					.map(f64::from)
+					.reduce(f64::max)
+					.unwrap_or(f64::NEG_INFINITY)
+			},
+		))
 	}
 
 	fn reduce_min(&self, buf: &WgpuBuffer) -> Result<f64> {
-		let partials = self.run_reduction(
+		Ok(self.run_reduction(
 			&self.reduce_min_pipeline,
 			buf,
-		);
-		Ok(partials
-			.iter()
-			.copied()
-			.map(f64::from)
-			.reduce(f64::min)
-			.unwrap_or(f64::INFINITY))
+			|p| {
+				p.iter()
+					.copied()
+					.map(f64::from)
+					.reduce(f64::min)
+					.unwrap_or(f64::INFINITY)
+			},
+		))
 	}
 
 	#[allow(clippy::similar_names)]
@@ -1180,11 +1188,17 @@ impl Backend for WgpuBackend {
 
 		let slice =
 			scratch.staging.slice(..staging_size);
-		slice.map_async(wgpu::MapMode::Read, |_| {});
+		let (tx, rx) = std::sync::mpsc::channel();
+		slice.map_async(wgpu::MapMode::Read, move |r| {
+			tx.send(r).ok();
+		});
 		self.ctx
 			.device
 			.poll(wgpu::PollType::wait_indefinitely())
 			.expect("device poll failed");
+		rx.recv()
+			.expect("map channel closed")
+			.expect("map_async failed");
 
 		let data = slice.get_mapped_range();
 		let partials: &[f32] =

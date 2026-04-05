@@ -27,9 +27,12 @@ impl HipGraph {
 	/// recorded into the graph instead of executing immediately.
 	/// Call `end_capture` to finalize.
 	///
+	/// # Safety
+	/// `stream` must be a valid, non-null HIP stream handle.
+	///
 	/// # Errors
 	/// Returns an error if capture fails.
-	pub fn begin_capture(
+	pub unsafe fn begin_capture(
 		stream: ffi::hipStream_t,
 	) -> Result<(), String> {
 		ffi::check(unsafe {
@@ -42,9 +45,13 @@ impl HipGraph {
 
 	/// End capture and instantiate the graph for replay.
 	///
+	/// # Safety
+	/// `stream` must be a valid, non-null HIP stream handle
+	/// that is currently in capture mode via `begin_capture`.
+	///
 	/// # Errors
 	/// Returns an error if capture or instantiation fails.
-	pub fn end_capture(
+	pub unsafe fn end_capture(
 		stream: ffi::hipStream_t,
 	) -> Result<Self, String> {
 		let mut graph = ptr::null_mut();
@@ -71,10 +78,13 @@ impl HipGraph {
 	/// All operations recorded during capture are replayed
 	/// with minimal launch overhead.
 	///
+	/// # Safety
+	/// `stream` must be a valid, non-null HIP stream handle.
+	///
 	/// # Errors
 	/// Returns an error if launch fails.
 	#[inline]
-	pub fn launch(
+	pub unsafe fn launch(
 		&self,
 		stream: ffi::hipStream_t,
 	) -> Result<(), String> {

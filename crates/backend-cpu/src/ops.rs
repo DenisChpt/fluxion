@@ -6,6 +6,22 @@ use rayon::prelude::*;
 
 use crate::buffer::CpuBuffer;
 
+/// Returns an error if any boundary is `Periodic` (not yet
+/// implemented — requires index wrapping in the stencil kernel).
+fn reject_periodic(bc: &Boundaries) -> Result<()> {
+	let sides = [bc.top, bc.bottom, bc.left, bc.right];
+	if sides
+		.iter()
+		.any(|s| matches!(s, BoundaryCondition::Periodic))
+	{
+		return Err(CoreError::BackendError(
+			"periodic boundaries are not yet implemented"
+				.into(),
+		));
+	}
+	Ok(())
+}
+
 /// CPU reference backend.
 ///
 /// All operations run with tight loops, parallelised via rayon
@@ -66,6 +82,7 @@ impl Backend for CpuBackend {
 		stencil: &Stencil,
 		boundaries: &Boundaries,
 	) -> Result<()> {
+		reject_periodic(boundaries)?;
 		let n = grid.len();
 		if input.len() != n {
 			return Err(CoreError::DimensionMismatch {
@@ -215,6 +232,7 @@ impl Backend for CpuBackend {
 		stencil: &Stencil,
 		_boundaries: &Boundaries,
 	) -> Result<()> {
+		reject_periodic(_boundaries)?;
 		let n = grid.len();
 		if x.len() != n {
 			return Err(CoreError::DimensionMismatch {
@@ -253,9 +271,7 @@ impl Backend for CpuBackend {
 	#[inline]
 	fn norm_l2(&self, buf: &CpuBuffer) -> Result<f64> {
 		let s = buf.as_slice();
-		// Parallel Kahan reduction: each chunk accumulates
-		// independently, then merge on the main thread.
-		let sum: f64 = s
+		let (sum, _) = s
 			.par_chunks(4096)
 			.map(|chunk| {
 				let mut acc = 0.0_f64;
@@ -266,16 +282,19 @@ impl Backend for CpuBackend {
 					comp = (t - acc) - y;
 					acc = t;
 				}
-				acc
+				(acc, comp)
 			})
-			.sum();
+			.reduce(
+				|| (0.0, 0.0),
+				kahan_merge,
+			);
 		Ok(sum.sqrt())
 	}
 
 	#[inline]
 	fn reduce_sum(&self, buf: &CpuBuffer) -> Result<f64> {
 		let s = buf.as_slice();
-		let sum: f64 = s
+		let (sum, _) = s
 			.par_chunks(4096)
 			.map(|chunk| {
 				let mut acc = 0.0_f64;
@@ -286,9 +305,12 @@ impl Backend for CpuBackend {
 					comp = (t - acc) - y;
 					acc = t;
 				}
-				acc
+				(acc, comp)
 			})
-			.sum();
+			.reduce(
+				|| (0.0, 0.0),
+				kahan_merge,
+			);
 		Ok(sum)
 	}
 
@@ -322,8 +344,7 @@ impl Backend for CpuBackend {
 		}
 		let xs = x.as_slice();
 		let ys = y.as_slice();
-		// Parallel Kahan dot: chunk-local accumulators.
-		let sum: f64 = xs
+		let (sum, _) = xs
 			.par_chunks(4096)
 			.zip(ys.par_chunks(4096))
 			.map(|(xc, yc)| {
@@ -336,9 +357,12 @@ impl Backend for CpuBackend {
 					comp = (t - acc) - t_y;
 					acc = t;
 				}
-				acc
+				(acc, comp)
 			})
-			.sum();
+			.reduce(
+				|| (0.0, 0.0),
+				kahan_merge,
+			);
 		Ok(sum)
 	}
 
@@ -791,14 +815,12 @@ fn apply_boundaries(
 			src[col],
 			src[cols + col],
 			dy,
-			true,
 		);
 		dst[last_row * cols + col] = bc_value(
 			bc.bottom,
 			src[last_row * cols + col],
 			src[(last_row - 1) * cols + col],
 			dy,
-			false,
 		);
 	}
 
@@ -810,14 +832,12 @@ fn apply_boundaries(
 			src[idx],
 			src[idx + 1],
 			dx,
-			true,
 		);
 		dst[idx + last_col] = bc_value(
 			bc.right,
 			src[idx + last_col],
 			src[idx + last_col - 1],
 			dx,
-			false,
 		);
 	}
 }
@@ -1104,6 +1124,18 @@ fn fused_5pt_axpy_row(
 	}
 }
 
+/// Merge two Kahan-compensated partial sums.
+#[inline]
+fn kahan_merge(
+	(a, ca): (f64, f64),
+	(b, cb): (f64, f64),
+) -> (f64, f64) {
+	let y = b - (ca + cb);
+	let t = a + y;
+	let c = (t - a) - y;
+	(t, c)
+}
+
 /// Compute the boundary value for a single point.
 #[inline]
 fn bc_value(
@@ -1111,16 +1143,15 @@ fn bc_value(
 	self_val: f64,
 	neighbor_val: f64,
 	spacing: f64,
-	is_lower: bool,
 ) -> f64 {
 	match bc {
 		BoundaryCondition::Dirichlet(val) => val,
 		BoundaryCondition::Neumann(flux) => {
-			if is_lower {
-				(-spacing).mul_add(flux, neighbor_val)
-			} else {
-				spacing.mul_add(flux, neighbor_val)
-			}
+			// u_boundary = u_interior + h·(∂u/∂n)
+			// Sign is the same for both sides because ∂u/∂n
+			// is defined w.r.t. the outward normal, which
+			// already flips direction at each boundary.
+			spacing.mul_add(flux, neighbor_val)
 		}
 		BoundaryCondition::Robin { alpha, beta, g } => {
 			// Robin: alpha·u + beta·∂u/∂n = g
@@ -1135,13 +1166,16 @@ fn bc_value(
 				return g / alpha;
 			}
 			let du_dn = (g - alpha * self_val) / beta;
-			if is_lower {
-				(-spacing).mul_add(du_dn, neighbor_val)
-			} else {
-				spacing.mul_add(du_dn, neighbor_val)
-			}
+			spacing.mul_add(du_dn, neighbor_val)
 		}
-		BoundaryCondition::Periodic => 0.0,
+		BoundaryCondition::Periodic => {
+			// Periodic BCs require index wrapping in the
+			// stencil kernel, not a ghost-cell value.
+			// This path should never be reached — periodic
+			// boundaries must be intercepted before calling
+			// apply_boundaries.
+			0.0
+		}
 	}
 }
 

@@ -13,7 +13,7 @@ use crate::field::Field;
 /// PI controller for smooth dt adaptation:
 /// ```text
 /// dt_new = dt · min(fac_max, max(fac_min,
-///     safety · (tol/err)^(0.7/5) · (err_prev/tol)^(0.4/5) ))
+///     safety · (1/err)^(1.1/5) · err_prev^(0.4/5) ))
 /// ```
 ///
 /// All 7 stage buffers are pre-allocated at construction.
@@ -117,6 +117,16 @@ impl AdaptiveSolver {
 		atol: f64,
 		rtol: f64,
 	) -> Result<Self> {
+		if !dt_init.is_finite() || dt_init <= 0.0 {
+			return Err(crate::error::RuntimeError::Core(
+				fluxion_core::CoreError::BackendError(
+					format!(
+						"dt_init must be positive and \
+						 finite, got {dt_init}"
+					),
+				),
+			));
+		}
 		let stencil =
 			Stencil::laplacian_2d_5pt(grid.dx, grid.dy);
 		let f =
@@ -260,9 +270,12 @@ impl AdaptiveSolver {
 				u.copy_from(&self.u_tmp)?;
 				self.sim_time += dt;
 
-				// PI controller for next dt.
+				// PI controller for next dt (Hairer-Wanner IV.2.14).
+				// h_new = h · safety · (1/err)^((α+β)/p)
+				//                    · err_prev^(β/p)
+				// with α=0.7, β=0.4, p=5.
 				let fac = safety
-					* (1.0 / err_norm).powf(0.7 / 5.0)
+					* (1.0 / err_norm).powf(1.1 / 5.0)
 					* (self.prev_err).powf(0.4 / 5.0);
 				let fac = fac.clamp(fac_min, fac_max);
 				self.dt = dt * fac;
@@ -289,6 +302,9 @@ impl AdaptiveSolver {
 		u: &mut Field,
 		t_end: f64,
 	) -> Result<()> {
+		if !t_end.is_finite() || t_end <= self.sim_time {
+			return Ok(());
+		}
 		while self.sim_time < t_end {
 			// Don't overshoot.
 			let remaining = t_end - self.sim_time;

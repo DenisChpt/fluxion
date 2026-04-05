@@ -268,7 +268,9 @@ impl DiffusionSolver {
 			let backend = crate::storage::hip_backend();
 			let stream = backend.stream();
 
-			HipGraph::begin_capture(stream)
+			// SAFETY: `stream` is a valid HIP stream obtained
+			// from the backend singleton.
+			unsafe { HipGraph::begin_capture(stream) }
 				.map_err(fluxion_core::CoreError::BackendError)?;
 
 			// Record one step (not executed, just captured).
@@ -289,8 +291,12 @@ impl DiffusionSolver {
 				}
 			}
 
-			let graph = HipGraph::end_capture(stream)
-				.map_err(fluxion_core::CoreError::BackendError)?;
+			// SAFETY: `stream` is valid and in capture mode
+			// from `begin_capture` above.
+			let graph = unsafe {
+				HipGraph::end_capture(stream)
+			}
+			.map_err(fluxion_core::CoreError::BackendError)?;
 
 			self.hip_graph =
 				Some(CachedHipGraph { graph });
@@ -305,9 +311,8 @@ impl DiffusionSolver {
 		// Any subsequent D2H readback (max, to_vec, norm_l2)
 		// syncs implicitly via hipMemcpy or sync_stream.
 		for _ in 0..n {
-			cached
-				.graph
-				.launch(stream)
+			// SAFETY: `stream` is a valid HIP stream.
+			unsafe { cached.graph.launch(stream) }
 				.map_err(fluxion_core::CoreError::BackendError)?;
 			self.steps_done += 1;
 		}

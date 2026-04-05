@@ -22,23 +22,13 @@ impl Device {
 		}
 		#[cfg(feature = "hip")]
 		{
-			if std::panic::catch_unwind(|| {
-				crate::storage::hip_backend();
-			})
-			.is_ok()
-			{
+			if crate::storage::try_init_hip().is_some() {
 				return Self::Hip { ordinal: 0 };
 			}
 		}
 		#[cfg(feature = "wgpu")]
 		{
-			// Try to init wgpu backend. If it succeeds, a GPU
-			// is available. The OnceLock caches it for later.
-			if std::panic::catch_unwind(|| {
-				crate::storage::wgpu_backend();
-			})
-			.is_ok()
-			{
+			if crate::storage::try_init_wgpu().is_some() {
 				return Self::Wgpu { adapter: 0 };
 			}
 		}

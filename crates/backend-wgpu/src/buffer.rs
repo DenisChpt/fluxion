@@ -59,10 +59,16 @@ impl WgpuBuffer {
 		self.queue.submit(std::iter::once(encoder.finish()));
 
 		let slice = staging.slice(..);
-		slice.map_async(wgpu::MapMode::Read, |_| {});
+		let (tx, rx) = std::sync::mpsc::channel();
+		slice.map_async(wgpu::MapMode::Read, move |r| {
+			tx.send(r).ok();
+		});
 		self.device
 			.poll(wgpu::PollType::wait_indefinitely())
 			.expect("device poll failed");
+		rx.recv()
+			.expect("map channel closed")
+			.expect("map_async failed");
 
 		let data = slice.get_mapped_range();
 		let result: Vec<f32> =
