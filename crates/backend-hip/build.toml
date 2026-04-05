@@ -1,0 +1,42 @@
+# HIP backend build configuration.
+#
+# Override at build time with env vars:
+#   FLUXION_HIP_ARCH    — comma-separated GPU architectures (e.g. "gfx1101")
+#   ROCM_PATH           — ROCm installation root
+
+[compiler]
+binary = "hipcc"
+std = "c++17"
+opt_level = 3
+extra_flags = ["--genco"]
+
+[compiler.defines]
+ROCPRIM_DISABLE_INLINE_NAMESPACE = true
+
+[compiler.includes]
+# Vendored rocPRIM (relative to the kernel directory).
+rocprim = "rocPRIM/rocprim/include"
+
+[kernels]
+dir = "../../kernels/hip"
+extension = ".hip"
+sources = [
+    "stencil_2d",
+    "fused_stencil_axpy",
+    "elementwise",
+    "reduce",
+    "multigrid",
+    "convection_diffusion",
+]
+
+[target]
+# Common RDNA 3 / CDNA 3 targets when auto-detection is unavailable.
+fallback_arches = ["gfx1100", "gfx90a"]
+detect_command = "rocminfo"
+detect_prefix = "gfx"
+
+[link]
+lib = "amdhip64"
+rocm_default_path = "/opt/rocm"
+# Fedora installs libamdhip64 in /usr/lib64.
+extra_lib_dirs = ["/usr/lib64"]

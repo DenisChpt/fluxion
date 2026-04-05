@@ -1,0 +1,17 @@
+[package]
+name = "fluxion-backend-wgpu"
+description = "Portable GPU backend via wgpu (Vulkan/Metal/DX12)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+fluxion-core = { workspace = true }
+wgpu = { workspace = true }
+pollster = { workspace = true }
+bytemuck = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

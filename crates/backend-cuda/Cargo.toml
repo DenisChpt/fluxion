@@ -1,0 +1,24 @@
+[package]
+name = "fluxion-backend-cuda"
+description = "CUDA backend for NVIDIA GPUs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints.rust]
+unsafe_code = "allow"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+module_name_repetitions = "allow"
+
+[dependencies]
+fluxion-core = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

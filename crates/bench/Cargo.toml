@@ -1,0 +1,36 @@
+[package]
+name = "fluxion-bench"
+description = "Benchmarks and performance regression detection"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+fluxion-core = { workspace = true }
+fluxion-runtime = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "stencil"
+harness = false
+
+[[bench]]
+name = "solver"
+harness = false
+
+[[bench]]
+name = "operations"
+harness = false
+
+[[bench]]
+name = "bandwidth"
+harness = false
+
+[[bench]]
+name = "scaling"
+harness = false

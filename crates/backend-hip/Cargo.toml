@@ -1,0 +1,41 @@
+[package]
+name = "fluxion-backend-hip"
+description = "HIP/ROCm backend for AMD GPUs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints.rust]
+unsafe_code = "allow"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+cast_possible_wrap = "allow"
+module_name_repetitions = "allow"
+# FFI patterns require these
+borrow_as_ptr = "allow"
+ptr_as_ptr = "allow"
+similar_names = "allow"
+significant_drop_tightening = "allow"
+unnecessary_wraps = "allow"
+redundant_closure_for_method_calls = "allow"
+not_unsafe_ptr_arg_deref = "allow"
+ref_as_ptr = "allow"
+manual_div_ceil = "allow"
+missing_errors_doc = "allow"
+non_send_fields_in_send_ty = "allow"
+
+[dependencies]
+fluxion-core = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[build-dependencies]
+toml = { workspace = true }
+serde = { workspace = true }

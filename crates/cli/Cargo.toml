@@ -1,0 +1,16 @@
+[package]
+name = "fluxion-cli"
+description = "Command-line interface"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+fluxion-core = { workspace = true }
+fluxion-runtime = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+tracing-subscriber = { workspace = true }

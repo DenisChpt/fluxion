@@ -1,0 +1,28 @@
+[package]
+name = "fluxion-runtime"
+description = "Device dispatch, Field type, and solver orchestration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+fluxion-core = { workspace = true }
+fluxion-backend-cpu = { workspace = true, optional = true }
+fluxion-backend-cuda = { workspace = true, optional = true }
+fluxion-backend-hip = { workspace = true, optional = true }
+fluxion-backend-wgpu = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[features]
+default = ["cpu", "wgpu"]
+cpu = ["dep:fluxion-backend-cpu"]
+cuda = ["dep:fluxion-backend-cuda"]
+hip = ["dep:fluxion-backend-hip"]
+wgpu = ["dep:fluxion-backend-wgpu"]

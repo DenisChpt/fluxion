@@ -1,0 +1,70 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/core",
+    "crates/runtime",
+    "crates/backend-cpu",
+    "crates/backend-cuda",
+    "crates/backend-hip",
+    "crates/backend-wgpu",
+    "crates/io",
+    "crates/bench",
+    "crates/cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/DenisChpt/fluxion"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+module_name_repetitions = "allow"
+
+[workspace.dependencies]
+# Internal crates
+fluxion-core = { path = "crates/core" }
+fluxion-runtime = { path = "crates/runtime" }
+fluxion-backend-cpu = { path = "crates/backend-cpu" }
+fluxion-backend-cuda = { path = "crates/backend-cuda" }
+fluxion-backend-hip = { path = "crates/backend-hip" }
+fluxion-backend-wgpu = { path = "crates/backend-wgpu" }
+fluxion-io = { path = "crates/io" }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# GPU
+wgpu = "29"
+pollster = "0.4"
+bytemuck = { version = "1.25", features = ["derive"] }
+
+# CPU
+faer = "0.24"
+rayon = "1.11"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Build
+toml = "1.1"
+serde = { version = "1", features = ["derive"] }
+
+# Testing & Benchmarking
+criterion = { version = "0.8", features = ["html_reports"] }
+proptest = "1.11"
